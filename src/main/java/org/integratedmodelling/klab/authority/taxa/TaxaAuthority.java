@@ -45,6 +45,11 @@ public class TaxaAuthority implements Authority {
 
   @Override public String getUrn() { return URN; }
 
+  /** Pinned taxon identities are immutable; query indexes may change independently. */
+  @Override public CachePolicy getCachePolicy() {
+    return new CachePolicy("col-xr-1", Long.MAX_VALUE, 86400, 86400);
+  }
+
   @Override public String configure(ConfigurationRequest request) {
     var parameters = request.parameters();
     if (!URN.equals(parameters.get("urn"))) throw new IllegalArgumentException("Wrong taxa provider URN");

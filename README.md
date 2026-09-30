@@ -61,10 +61,26 @@ The binding name `TAXA` is arbitrary. Once configured, `TAXA:5WZLF` requests tha
 | `searchLimit` | `25` | First-page candidate limit, 1–100. |
 | `cacheSize` | `5000` | Maximum cached name usages per bridge, 1–100000. |
 
-Unknown parameters are rejected to catch configuration typos. Each `configure()` call creates a
-separate opaque ID, root context and LRU cache. `releaseConfiguration()` removes that bridge;
-its ID is subsequently invalid. The Reasoner may reuse identical declarations before calling the
-provider. No cache is shared between bridges or persisted globally.
+Unknown parameters are rejected to catch configuration typos. Direct provider `configure()` creates
+a transient handle and bounded LRU cache; the Reasoner reuses identical active declarations and
+wraps the provider with its shared persistent authority cache. The externally returned bridge ID
+contains the worldview/local configuration name and a fingerprint of the root, full parameter map,
+provider implementation and cache policy. It remains stable across restart/reload when these match.
+`releaseConfiguration()` invalidates the live handle but retains persisted results for later reuse.
+
+Persistence belongs to the Reasoner core, not TAXA. It stores successful identities, search pages
+and reconciliation results under its `services/reasoner/authority-cache` data directory. Cached
+records use a core DTO independent of plug-in classes; every ancestor resolved by the Reasoner is
+cached separately. Different datasets, endpoints, roots, worldviews, local names, provider artifacts
+and cache-policy revisions select different partitions. Search candidates never bypass full code
+validation by seeding the identity cache. Failed or diagnostic-bearing responses are not persisted.
+
+TAXA declares `getCachePolicy()` revision `col-xr-1`: pinned taxon identities have no time expiry,
+while search and reconciliation expire after one day. Other authorities use the shared default
+(one day for identities, five minutes for queries) or override/disable it. Reconfiguration still
+restores a live provider handle and validates release metadata; the cache is not an automatic
+offline-mode bypass of configuration or worldview integrity checks. Direct provider use outside a
+Reasoner retains only its in-memory LRU.
 
 ## Hierarchy and the worldview root
 
@@ -186,5 +202,5 @@ API inspection verified the formats and the ambiguous-match behavior; it is not 
 Remaining service work includes identity/search/reconciliation REST and
 UI transport, bracket expressions, provenance enforcement and component update lifecycle. A full
 Resources-to-Reasoner worldview ingestion test is needed before calling the stack operational.
-Persistent/offline taxonomy snapshots, release migration/equivalence, search pagination, vernacular
+Offline taxonomy snapshots, release migration/equivalence, search pagination, vernacular
 language preferences, and semantic-distance delegation are future features.
