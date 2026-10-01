@@ -3,7 +3,7 @@
 `klab.authority.taxa` is an embeddable, searchable authority for taxonomic identities at any rank
 available in a **pinned Catalogue of Life Extended Release (COL XR)** in ChecklistBank. It supplies
 accepted taxon codes, scientific labels, descriptions, immediate parents, scientific/vernacular
-name search, and explicit scientific-name reconciliation. Codelists are not implemented.
+name search, documentation URLs, and explicit scientific-name reconciliation. Codelists are not implemented.
 
 The provider uses the current `org.integratedmodelling.klab.api.services.Authority` contract.
 Its authority URN is `klab.authority.taxa`, independently of the local name chosen by a worldview.
@@ -192,7 +192,40 @@ The 0.11 `GBIFAuthority` was consulted locally. Its numeric `/v1/species` lookup
 `getIdentity`/`setup` signatures, rank-name inference, and suggest-only search are replaced by
 release-scoped ChecklistBank data, provider-held bridges, explicit parents and full-text search.
 The historical `PHLYUM` spelling is rejected; `PHYLUM` is valid. No global cache-clearing parameter,
-GBIF numeric-key migration, codelists, or speculative documentation endpoint is carried forward.
+GBIF numeric-key migration or codelists are carried forward.
+
+## Identity documentation
+
+Every successful identity (including search candidates and canonicalized synonyms) exposes an
+immutable `Map<String, URL>` through `getDocumentation()`. It contains `text/markdown`, the
+ChecklistBank taxon page as `text/html`, and the pinned name-usage endpoint as `application/json`.
+The Markdown includes taxonomic and nomenclatural details, parent and dataset identifiers, remarks,
+environment/extinction information when supplied, release metadata, licenses and source links.
+
+The client reads the documented `/dataset/{key}/taxon/{id}/treatment?format=MARKDOWN` and
+`/dataset/{key}/taxon/{id}/media` endpoints. Markdown treatments are incorporated into the generated
+document; other returned treatment types retain their source URL when supplied with a MIME type.
+Media resources with explicit MIME formats (such as `image/jpeg`, `application/pdf` or `audio/mpeg`)
+are added to the map. The first resource per MIME type is retained because the contract provides
+one URL per type; all media links, titles, credits and licenses remain in Markdown. Unspecified
+formats are not guessed from the category or filename. Optional 404/204 responses mean no resource;
+other optional transport/schema failures yield warnings while retaining the taxon and basic
+Markdown. Failed enrichment is retried on subsequent lookups.
+
+Generated UTF-8 Markdown is materialized as content-addressed `.md` files under
+`java.io.tmpdir/klab.authority.taxa/documentation`. The URL uses the standard `file:` protocol and
+can be opened by Java and serialized without a custom protocol handler. Files are retained across
+bridge release and cache eviction, but host cleanup of the temporary directory removes them.
+These URLs are accessible on the authority host. Remote clients can request the Reasoner's
+`GET /api/v1/authority/documentation?authority=TAXA&identity=<code>` endpoint to obtain a media-type
+to URL map. It publishes local resources through `/api/v1/authority/documentation/content` while
+preserving upstream HTTP URLs. Both Reasoner routes require the usual authenticated scope; clients
+must send their authorization and scope headers when fetching local documentation. The binding name
+may include an advertised search rank such as `TAXA.SPECIES`. This component does not start a
+separate documentation web server.
+
+The provider cache revision is `col-xr-2` to invalidate identities created before documentation
+was added. Full usage and documentation caches are bounded per bridge by `cacheSize`.
 
 Provider tests cover configuration validation, independent bridges, release, accepted/synonym
 canonicalization, parent/root semantics, cycles/missing parents, subspecies, rank search, URL
